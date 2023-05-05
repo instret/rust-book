@@ -232,6 +232,8 @@ To avoid this situation, we finally arrive at ownership. When `a` is bound to `B
 
 > **Box deallocation principle (fully correct):** If a variable owns a box, when Rust deallocates the variable's frame, then Rust deallocates the box's heap memory.
 
+>| Treat this rule as a `std::unique_ptr` in cpp, and `b` "move"s the ownership from `a`. In Rust, every assignments is the `std::move`, i.e. `b = std::move(a);`.
+
 In the example above, `b` owns the boxed array. Therefore when the scope ends, Rust deallocates the box only once on behalf of `b`, not `a`.
 
 
@@ -249,6 +251,9 @@ let b = a;`[]`
 An exceedingly common question from readers is: if `a` is moved at L2, why is it still in the diagram? Shouldn't `a` disappear, or gray out, or otherwise "move" somewhere?
 
 No! **At runtime, nothing happens to `a` when it is moved.** There is no "ownership bit" that gets flipped in memory. There is no "has-been-moved" flag that gets turned on. Ownership only exists at compile-time. The diagram does not show how the compiler "thinks" about the program. It shows how the program actually executes at runtime. At runtime, a move is just a copy. At compile-time, a move is a transfer of ownership.
+
+>| It makes sense because even `b` has taken the ownership from `a`, doesn't mean that `a` is useless, what if there's another variable `c` owns a pointer to the `a` like `c = &a`? The compiler chooses a safer way to "move" in runtime.
+>| P.S. Just my imagination, may contains errornous :X
 
 
 ### Collections Use Boxes
@@ -268,6 +273,9 @@ fn add_suffix(mut name: String) -> String {
 }
 ```
 
+
+>| An interesting part is the `mut name` param in the `add_suffix` function, to flatten it, `let mut name = first`, the immutable is only guarrentes that everything on the stack are immutable, but not the pointed area. So in here the Rust "copies" the stack contents of variable `first` to variable `name`, then "moves" the pointer from `first` to `name`.
+>| Also, you can treat it as the cpp's `std::unique_ptr`, that makes a lot easier for understanding.
 
 This program is more involved, so make sure you follow each step:
 
@@ -294,7 +302,7 @@ fn add_suffix(mut name: String) -> String {
 }
 ```
 
-`first` points to deallocated memory after calling `add_suffix`. Reading `first` in `println!` would therefore be a violation of memory safety (undefined behavior). Remember: it's not a problem that `first` points to deallocated memory. It's a problem that we tried to *use* `first` after it became invalid.
+`first` points to deallocated memory after calling `add_suffix`. Reading `first` in `println!` would therefore be a violation of memory safety (undefined behavior). **Remember: it's not a problem that `first` points to deallocated memory. It's a problem that we tried to *use* `first` after it became invalid.**
 
 Thankfully, Rust will refuse to compile this program, giving the following error:
 
