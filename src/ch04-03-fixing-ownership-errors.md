@@ -58,7 +58,7 @@ fn return_a_string(output: &mut String) {
 
 With this strategy, the caller is responsible for creating space for the string. This style can be verbose, but it can also be more memory-efficient if the caller needs to carefully control when allocations occur.
 
-Which strategy is most appropriate will depend on your application. But the key idea is to recognize the root issue underlying the surface-level ownership error. How long should my string live? Who should be in charge of deallocating it? Once you have a clear answer to those questions, then it's a matter of changing your API to match.
+Which strategy is most appropriate will depend on your application. But the key idea is to recognize the root issue underlying the surface-level ownership error. **How long should my string live?** Who should be in charge of deallocating it? Once you have a clear answer to those questions, then it's a matter of changing your API to match.
 
 
 ### Fixing an Unsafe Program: Not Enough Permissions
@@ -160,6 +160,8 @@ fn add_big_strings(dst: &mut Vec<String>, src: &[String]) {
 
 This program is rejected by the borrow checker because `let largest = ..` removes the @Perm{write} permissions on `dst`. However, `dst.push(..)` requires the @Perm{write} permission. Again, we should ask: **why is this program unsafe?** Because `dst.push(..)` could deallocate the contents of `dst`, invalidating the reference `largest`.
 
+>| Notice the `dst.push()` line, in here, the `largest` object still lives, because when next loop comes we still need to access the `largest` object. So another solution here can be store the `largest.len()` to a variable outside the for-loop, i.e. `if s.len() > largest_len`. Just as below...
+
 To fix the program, the key insight is that we need to shorten the lifetime of `largest` to not overlap with `dst.push(..)`. One possibility is to clone `largest`:
 
 ```rust
@@ -202,7 +204,7 @@ fn add_big_strings(dst: &mut Vec<String>, src: &[String]) {
 }
 ```
 
-These solutions all share in common the key idea: shortening the lifetime of borrows on `dst` to not overlap with a mutation to `dst`.
+These solutions all share in common the key idea: **shortening** the lifetime of borrows on `dst` to not overlap with a mutation to `dst`.
 
 ### Fixing an Unsafe Program: Copying vs. Moving Out of a Collection
 
@@ -269,6 +271,8 @@ In sum, **if a value does not own heap data, then it can be copied without a mov
 * A `String` **does** own heap data, so it **can not** be copied without a move.
 * An `&String` **does not** own heap data, so it **can** be copied without a move.
 
+>| You can sometimes treat the `&String` just as a pointer value, perhaps.
+
 > *Note:* One exception to this rule is mutable references. For example, `&mut i32` is not a copyable type. So if you do something like:
 > ```rust,ignore
 > let mut n = 0;
@@ -309,6 +313,8 @@ println!("{s}");
 assert!(v.len() == 0);
 #}
 ```
+
+>| Don't know if there has some kind of `swap` method? Swapping contents without taking the ownership, just like what cpp `std::move` does.
 
 
 ### Fixing a Safe Program: Mutating Different Tuple Fields
@@ -365,9 +371,13 @@ error[E0502]: cannot borrow `name.1` as mutable because it is also borrowed as i
 
 That's strange, since the program was safe before we edited it. The edit we made doesn't meaningfully change the runtime behavior. So why does it matter that we put `&name.0` into a function?
 
-The problem is that Rust doesn't look at the implementation of `get_first` when deciding what `get_first(&name)` should borrow. Rust only looks at the type signature, which just says "some `String` in the input gets borrowed". Rust conservatively decides then that both `name.0` and `name.1` get borrowed, and eliminates write and own permissions on both. 
+The problem is that Rust **doesn't look at the implementation** of `get_first` when deciding what `get_first(&name)` should borrow. Rust only looks at the type signature, which just says "some `String` in the input gets borrowed". Rust conservatively decides then that both `name.0` and `name.1` get borrowed, and eliminates write and own permissions on both. 
+
+>| In sum up, when borrow-checker meets a function call, it can only check the parameter and return value's type to know the RWO information.
 
 Remember, the key idea is that **the program above is safe.** It has no undefined behavior! A future version of Rust may be smart enough to let it compile, but for today, it gets rejected. So how should we work around the borrow checker today? One possibility is to inline the expression `&name.0`, like in the original program. Another possibility is to defer borrow checking to runtime with [cells], which we will discuss in future chapters.
+
+>| It seems that this problem cannot be resolved simply?
 
 ### Fixing a Safe Program: Mutating Different Array Elements
 
@@ -416,6 +426,8 @@ error[E0502]: cannot borrow `a[_]` as immutable because it is also borrowed as m
 
 <!-- However, Rust will reject this program because `a` gave its read permission to `x`. -->
 
+>| It seems that Rust is preventing you from accessing the array `a` after it's element gets borrowed, but it also prevents you from accessing the `a[_]`?
+
 
 Again, **this program is safe.** For cases like these, Rust often provides a function in the standard library that can work around the borrow checker. For example, we could use [`slice::split_first_mut`][split_first_mut]:
 
@@ -440,6 +452,8 @@ unsafe { *x += *y; } // DO NOT DO THIS unless you know what you're doing!
 ```
 
 Unsafe code is sometimes necessary to work around the limitations of borrow checker. As a general strategy, let's say the borrow checker rejects a program you think is actually safe. Then you should look for standard library functions (like `split_first_mut`) that contain `unsafe` blocks which solve your problem. We will discuss unsafe code further in [Chapter 20][unsafe]. For now, just be aware that unsafe code is how Rust implements certain otherwise-impossible patterns.
+
+>| In sum up, use the libraries' function when possible, and only use `unsafe` if there's the only way.
 
 {{#quiz ../quizzes/ch04-03-fixing-ownership-errors-sec2-safety.toml}}
 
