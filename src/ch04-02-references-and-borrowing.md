@@ -66,6 +66,8 @@ The expression `&m1` uses the ampersand operator to create a reference to (or "b
 
 Observe at L2 that there are two steps from `g1` to the string "Hello". `g1` is a reference that points to `m1` on the stack, and `m1` is a String containing a box that points to "Hello" on the heap.
 
+>| Notice the `g1` is a pointer referenced to the stack, instead of the heap. In cpp thats a common (but not the only one) way to deal with the reference, is to make a pointer, achiving the "borrow" effect.
+
 While `m1` owns the heap data "Hello", `g1` does _not_ own either `m1` or "Hello". Therefore after `greet` ends and the program reaches L3, no heap data has been deallocated. Only the stack frame for `greet` disappears. This fact is consistent with our *Moved Heap Data Principle*. Because `g1` did not own "Hello", Rust did not deallocate "Hello" on behalf of `g1`.
 
 References are **non-owning pointers**, because they do not own the data they point to.
@@ -90,6 +92,9 @@ let c: i32 = *r2;`[]`    // so only one dereference is needed to read it
 ```
 
 Observe the difference between `r1` pointing to `x` on the stack, and `r2` pointing to the heap value `2`.
+
+>| The main effect of deference, in my opion, is to take the ownership to the innter "element". Say you have a `a -> b -> c`, what if I want to move the element `c` to another position? However, that just some imaginations, still need lots of practice in the read world :X
+>| Also, the deference is just an "operator", and may be defined by serveral traits. So the `Box` here isn't really a pointer, but it "acts" just like a pointer.
 
 You probably won't see the dereference operator very often when you read Rust code. Rust implicitly inserts dereferences and references in certain cases, such as calling a method with the dot operator. For example, this program shows two equivalent ways of calling the [`i32::abs`](https://doc.rust-lang.org/std/primitive.i32.html#method.abs) (absolute value) and [`str::len`](https://doc.rust-lang.org/std/primitive.str.html#method.len) (string length) functions:
 
@@ -203,8 +208,8 @@ Let's walk through each line:
 
 1. After `let mut vec = (...)`, the variable `vec` has been initialized (indicated by <i class="fa fa-level-up"></i>). It gains @Perm[gained]{read}@Perm[gained]{write}@Perm[gained]{own} permissions (the plus sign indicates gain).
 2. After `let num = &vec[2]`, the data in `vec` has been **borrowed** by `num` (indicated by <i class="fa fa-arrow-right"></i>). Three things happen:
-   - The borrow removes @Perm[lost]{write}@Perm[lost]{own} permissions from `vec` (the slash indicates loss). `vec` cannot be written or owned, but it can still be read.
-   - The variable `num` has gained @Perm{read}@Perm{own} permissions. `num` is not writable (the missing @Perm{write} permission is shown as a dash <span class="perm write">‒</span>) because it was not marked `let mut`.
+   - The borrow removes @Perm[lost]{write}@Perm[lost]{own} permissions from `vec` (the slash indicates loss). `vec` cannot be written or owned, but it can still be read. >| Because the `num` is borrowed as immutable, therefore the `vec` losses its write permission. But also, even the `num` is borrowed as mutable, error will still follow if you try `vec[0] = 1`, as Rust only allow one mutable borrow at a time.
+   - The variable `num` has gained @Perm{read}@Perm{own} permissions. `num` is not writable (the missing @Perm{write} permission is shown as a dash <span class="perm write">‒</span>) because it was not marked `let mut`. >| The O permission means that the `num` owns the pointer value (not the object that pointed). A simple rule is that if no one borrows you O own the object, but if borrow happens you will not own it (like `vec` losses its O permission).
    - The **path** `*num` has gained the @Perm{read} permission.
 3. After `println!(...)`, then `num` is no longer in use, so `vec` is no longer borrowed. Therefore:
    - `vec` regains its @Perm{write}@Perm{own} permissions (indicated by <i class="fa fa-rotate-left"></i>).
@@ -222,6 +227,8 @@ let mut x_ref = &x;
 ```
 
 Notice that `x_ref` has the @Perm{write} permission, while `*x_ref` does not. That means we can assign `x_ref` to a different reference (e.g. `x_ref = &y`), but we cannot mutate the pointed data (e.g. `*x_ref += 1`).
+
+>| The classic problem, const pointer or pointer to const.
 
 More generally, permissions are defined on **paths** and not just variables. A path is anything you can put on the left-hand side of an assignment. Paths include:
 
@@ -300,12 +307,12 @@ println!("Vector is now {:?}", vec);
 
 A mutable reference is created with the `&mut` operator. The type of `num` is written as `&mut i32`. Compared to immutable references, you can see two important differences in the permissions:
 
-1. When `num` was an immutable reference, `vec` still had the @Perm{read} permission. Now that `num` is a mutable reference, `vec` has lost _all_ permissions while `num` is in use.
+1. When `num` was an immutable reference, `vec` still had the @Perm{read} permission. Now that `num` is a mutable reference, `vec` has lost _all_ permissions while `num` is in use. |> The big difference cames here, when a mutable borrow happens, Rust ensures that no other one can read the object, because it will lead to inconsistent state, therefore the R permission is dropped.
 2. When `num` was an immutable reference, the path `*num` only had the @Perm{read} permission. Now that `num` is a mutable reference, `*num` has also gained the @Perm{write} permission.
 
 The first observation is what makes mutable references *safe*. Mutable references allow mutation but prevent aliasing. The borrowed path `vec` becomes temporarily unusable, so effectively not an alias.
 
-The second observation is what makes mutable references *useful*. `vec[2]` can be mutated through `*num`. For example, `*num += 1` mutates `vec[2]`. Note that `*num` has the @Perm{write} permission, but `num` does not. `num` refers to the mutable reference itself, e.g. `num` cannot be reassigned to a *different* mutable reference.
+The second observation is what makes mutable references *useful*. `vec[2]` can be mutated through `*num`. For example, `*num += 1` mutates `vec[2]`. Note that `*num` has the @Perm{write} permission, but `num` does not. `num` refers to the mutable reference itself, e.g. `num` cannot be reassigned to a *different* mutable reference. >| If you want, `let mut` is what you need.
 
 Mutable references can also be temporarily "downgraded" to read-only references. For example:
 
@@ -321,6 +328,8 @@ println!("{} {}", *num, *num2);
 > *Note:* when permission changes are not relevant to an example, we will hide them. You can view hidden steps by clicking "»", and you can view hidden permissions within a step by clicking "● ● ●".
 
 In this program, the borrow `&*num` removes the @Perm{write} permission from `*num` but _not_ the @Perm{read} permission, so `println!(..)` can read both `*num` and `*num2`.
+
+>| That make sense
 
 
 ### Permissions Are Returned At The End of a Reference's Lifetime
@@ -438,6 +447,8 @@ fn return_a_string() -> &String {
 ```
 
 This program is unsafe because the reference `&s` will be invalidated when `return_a_string` returns. And Rust will reject this program with a similar `missing lifetime specifier` error. Now you can understand that error means that `s_ref` is missing the appropriate flow permissions.
+
+>| It seems that the F permission is used to check if the lifetime is valid. We need a lifetime parameter to indicate the param's lifetime, perhaps?
 
 
 {{#quiz ../quizzes/ch04-02-references-sec3-safety.toml}}
