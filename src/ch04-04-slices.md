@@ -137,8 +137,8 @@ using a range within brackets by specifying `[starting_index..ending_index]`,
 where `starting_index` is the first position in the slice and `ending_index` is
 one more than the last position in the slice.
 
-Slices are special kinds of references because they are "fat" pointers, or pointers
-with metadata. Here, the metadata is the length of the slice. We can see this metadata
+Slices are special kinds of references because they are **"fat" pointers, or pointers
+with metadata**. Here, the metadata is the length of the slice. We can see this metadata
 by changing our visualization to peek into the internals of Rust's data structures:
 
 ```aquascope,interpreter,concreteTypes,hideCode
@@ -151,6 +151,9 @@ fn main() {
     `[]`
 }
 ```
+
+>| Slice of `String` is `&str`? What's the real relationship? In [an article](https://blog.logrocket.com/understanding-rust-string-str) about the `str` says that, the `str` has no O but only R permission (therefore you can only "borrow" it), less permission always means better. So in general, use `&str` as possible, while converting `String` to `&str` is mostly costless.
+>| For low-level programming, you might want the `byte` since both `String` and `str` is UTF-8 :)
 
 Observe that the variables `hello` and `world` have both a `ptr` and a `len` field, which together define the underlined regions
 of the string on the heap. You can also see here what a `String` actually looks like: a string is a vector of bytes (`Vec<u8>`),
@@ -279,7 +282,7 @@ Recall from the borrowing rules that if we have an immutable reference to
 something, we cannot also take a mutable reference. Because `clear` needs to
 truncate the `String`, it needs to get a mutable reference. The `println!`
 after the call to `clear` uses the reference in `word`, so the immutable
-reference must still be active at that point. Rust disallows the mutable
+reference **must still be active at that point**. Rust disallows the mutable
 reference in `clear` and the immutable reference in `word` from existing at the
 same time, and compilation fails. Not only has Rust made our API easier to use,
 but it has also eliminated an entire class of errors at compile time!
@@ -296,6 +299,8 @@ let s = "Hello, world!";
 The type of `s` here is `&str`: it’s a slice pointing to that specific point of
 the binary. This is also why string literals are immutable; `&str` is an
 immutable reference.
+
+>| Rust prefer to use the `&str` as well :)
 
 #### String Slices as Parameters
 
@@ -322,7 +327,7 @@ can pass a slice of the `String` or a reference to the `String`. This
 flexibility takes advantage of *deref coercions*, a feature we will cover in
 the [“Implicit Deref Coercions with Functions and
 Methods”][deref-coercions]<!--ignore--> section of Chapter 15. Defining a
-function to take a string slice instead of a reference to a `String` makes our
+function to **take a string slice `&str` instead of a reference to a `String`** makes our
 API more general and useful without losing any functionality:
 
 <span class="filename">Filename: src/main.rs</span>
@@ -330,6 +335,8 @@ API more general and useful without losing any functionality:
 ```rust
 {{#rustdoc_include ../listings/ch04-understanding-ownership/listing-04-09/src/main.rs:usage}}
 ```
+
+>| Notice that the `String` can be borrowed as `&str` directly, without the `[..]` syntax.
 
 ### Other Slices
 
@@ -357,6 +364,8 @@ slice for all sorts of other collections. We’ll discuss these collections in
 detail when we talk about vectors in Chapter 8.
 
 {{#quiz ../quizzes/ch04-04-slices.toml}}
+
+>| Interesting size of `&str`, it isn't identical to a pointer, it's really a "fat" pointer described above, meaning one more abstraction is made by Rust, huh.
 
 ## Summary
 
