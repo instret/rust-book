@@ -62,6 +62,8 @@ However, this code won’t compile because the value `r` is referring to has gon
 {{#include ../listings/ch10-generic-types-traits-and-lifetimes/listing-10-16/output.txt}}
 ```
 
+>| It can be also explained as that, inside the inner scope, `x` owns O permission, then it borrowed by `r` which loses its O perm. When leaving the scope, `x` finds that it doesn't have the O perm and thus is not allowed to "drop", leading a "drop while still borrowed" error.
+
 The variable `x` doesn’t “live long enough.” The reason is that `x` will be out
 of scope when the inner scope ends on line 7. But `r` is still valid for the
 outer scope; because its scope is larger, we say that it “lives longer.” If
@@ -180,6 +182,8 @@ and very short, like generic types. Most people use the name `'a` for the first
 lifetime annotation. We place lifetime parameter annotations after the `&` of a
 reference, using a space to separate the annotation from the reference’s type.
 
+>| This also constraints that the lifetime annotation is only applicable to a reference. For a non-copyable variable, the lifetime of it is simply the whole block (maximum), like the `string1`.
+
 Here are some examples: a reference to an `i32` without a lifetime parameter, a
 reference to an `i32` that has a lifetime parameter named `'a`, and a mutable
 reference to an `i32` that also has the lifetime `'a`.
@@ -192,7 +196,7 @@ reference to an `i32` that also has the lifetime `'a`.
 
 One lifetime annotation by itself doesn’t have much meaning, because the
 annotations are meant to tell Rust how generic lifetime parameters of multiple
-references relate to each other. Let’s examine how the lifetime annotations
+references **relate** to each other. Let’s examine how the lifetime annotations
 relate to each other in the context of the `longest` function.
 
 ### Lifetime Annotations in Function Signatures
@@ -201,11 +205,13 @@ To use lifetime annotations in function signatures, we need to declare the
 generic *lifetime* parameters inside angle brackets between the function name
 and the parameter list, just as we did with generic *type* parameters.
 
-We want the signature to express the following constraint: the returned
-reference will be valid as long as both the parameters are valid. This is the
+We want the signature to express the following constraint: **the returned
+reference will be valid as long as both the parameters are valid**. This is the
 relationship between lifetimes of the parameters and the return value. We’ll
 name the lifetime `'a` and then add it to each reference, as shown in Listing
 10-21.
+
+>| The function let Rust knows that both `string1`, `string2` and `result` are having common lifetime, when `string1` invalided, the `result` is invalided as well.
 
 <span class="filename">Filename: src/main.rs</span>
 
@@ -223,11 +229,13 @@ This code should compile and produce the result we want when we use it with the
 The function signature now tells Rust that for some lifetime `'a`, the function
 takes two parameters, both of which are string slices that live at least as
 long as lifetime `'a`. The function signature also tells Rust that the string
-slice returned from the function will live at least as long as lifetime `'a`.
+slice returned from the function will **live at least as long as lifetime `'a`**.
 In practice, it means that the lifetime of the reference returned by the
-`longest` function is the same as the smaller of the lifetimes of the values
+`longest` function is the same as the **smaller** of the lifetimes of the values
 referred to by the function arguments. These relationships are what we want
 Rust to use when analyzing this code.
+
+>| In sum up, Rust takes the common lifetime "duration" and binds it to the result.
 
 Remember, when we specify the lifetime parameters in this function signature,
 we’re not changing the lifetimes of any values passed in or returned. Rather,
@@ -237,8 +245,8 @@ know exactly how long `x` and `y` will live, only that some scope can be
 substituted for `'a` that will satisfy this signature.
 
 When annotating lifetimes in functions, the annotations go in the function
-signature, not in the function body. The lifetime annotations become part of
-the contract of the function, much like the types in the signature. Having
+signature, not in the function body. **The lifetime annotations become part of
+the contract of the function, much like the types in the signature.** Having
 function signatures contain the lifetime contract means the analysis the Rust
 compiler does can be simpler. If there’s a problem with the way a function is
 annotated or the way it is called, the compiler errors can point to the part of
@@ -248,7 +256,7 @@ to be, the compiler might only be able to point to a use of our code many steps
 away from the cause of the problem.
 
 When we pass concrete references to `longest`, the concrete lifetime that is
-substituted for `'a` is the part of the scope of `x` that overlaps with the
+substituted for `'a` is the part of the scope of `x` that *overlaps* with the
 scope of `y`. In other words, the generic lifetime `'a` will get the concrete
 lifetime that is equal to the smaller of the lifetimes of `x` and `y`. Because
 we’ve annotated the returned reference with the same lifetime parameter `'a`,
@@ -367,6 +375,8 @@ reference. In this case, the best fix would be to return an owned data type
 rather than a reference so the calling function is then responsible for
 cleaning up the value.
 
+>| Another intresting attempt is to return `let refer: &'a str = result.as_str(); refer`, you will get another error E0597. The cause is that we're trying to "extend" the lifetime of `result`, but that's not working because lifetime annotation is just a "indication", and has no effect of extending the lifetime.
+
 Ultimately, lifetime syntax is about connecting the lifetimes of various
 parameters and return values of functions. Once they’re connected, Rust has
 enough information to allow memory-safe operations and disallow operations that
@@ -394,6 +404,8 @@ lifetime parameter inside angle brackets after the name of the struct so we can
 use the lifetime parameter in the body of the struct definition. This
 annotation means an instance of `ImportantExcerpt` can’t outlive the reference
 it holds in its `part` field.
+
+>| That also increases the impossibility of implementing the list in Rust :/ Because you cannot easily bind a reference that live outside a code block, which makes the `next` and `prev` pointer hard to implement, as they may point to a object that created in other scope and have different lifetimes.
 
 The `main` function here creates an instance of the `ImportantExcerpt` struct
 that holds a reference to the first sentence of the `String` owned by the
@@ -444,6 +456,8 @@ The patterns programmed into Rust’s analysis of references are called the
 a set of particular cases that the compiler will consider, and if your code
 fits these cases, you don’t need to write the lifetimes explicitly.
 
+>| Only write the type annotation when compiler needs you to do :)
+
 The elision rules don’t provide full inference. If Rust deterministically
 applies the rules but there is still ambiguity as to what lifetimes the
 references have, the compiler won’t guess what the lifetime of the remaining
@@ -461,7 +475,7 @@ which it can’t figure out lifetimes, the compiler will stop with an error.
 These rules apply to `fn` definitions as well as `impl` blocks.
 
 <!-- BEGIN INTERVENTION: d03748df-8dcf-4ec8-bd30-341927544665 -->
-The first rule is that the compiler assigns a different lifetime parameter to each lifetime in each input type. References like `&'_ i32` needs a lifetime parameter, and structures like `ImportantExcerpt<'_>` need a lifetime parameter. For example:
+The first rule is that the compiler assigns a **different lifetime** parameter to each lifetime in each input type. References like `&'_ i32` needs a lifetime parameter, and structures like `ImportantExcerpt<'_>` need a lifetime parameter. For example:
 * The function `fn foo(x: &i32)` would get one lifetime parameter and become `fn foo<'a>(x: &'a i32)`. 
 * The function `fn foo(x: &i32, y: &i32)` would get two lifetime parameters and become `fn foo<'a, 'b>(x: &'a i32, y: &'b i32)`.
 * The function `fn foo(x: &ImportantExcerpt)` would get two lifetime parameters and become `fn foo<'a, 'b>(x: &'a ImportantExcerpt<'b>)`.
@@ -531,6 +545,8 @@ Because the third rule really only applies in method signatures, we’ll look at
 lifetimes in that context next to see why the third rule means we don’t have to
 annotate lifetimes in method signatures very often.
 
+>| Well, trivial, but works.
+
 ### Lifetime Annotations in Method Definitions
 
 When we implement methods on a struct with lifetimes, we use the same syntax as
@@ -570,6 +586,8 @@ and gives both `&self` and `announcement` their own lifetimes. Then, because
 one of the parameters is `&self`, the return type gets the lifetime of `&self`,
 and all lifetimes have been accounted for.
 
+>| This rule is more likely based on practice: the return value of a method is more likely a member of `self`?
+
 ### The Static Lifetime
 
 One special lifetime we need to discuss is `'static`, which denotes that the
@@ -588,9 +606,11 @@ You might see suggestions to use the `'static` lifetime in error messages. But
 before specifying `'static` as the lifetime for a reference, think about
 whether the reference you have actually lives the entire lifetime of your
 program or not, and whether you want it to. Most of the time, an error message
-suggesting the `'static` lifetime results from attempting to create a dangling
-reference or a mismatch of the available lifetimes. In such cases, the solution
+suggesting the `'static` lifetime results from *attempting to create a dangling
+reference or a mismatch of the available lifetimes*. In such cases, the solution
 is fixing those problems, not specifying the `'static` lifetime.
+
+>| So, can I write a double-linked list with the `'static` lifetime?
 
 ### Generic Type Parameters, Trait Bounds, and Lifetimes Together
 
